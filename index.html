@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bíblia Diária - Estudo Comunitário</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-stone-50 text-stone-800 min-h-screen flex flex-col font-sans">
+
+  <!-- Barra de Administrador (Só aparece quando você logar com seu e-mail) -->
+  <div id="painel-admin" class="hidden bg-stone-900 text-white px-4 py-3 border-b border-stone-700">
+    <div class="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2 text-xs font-semibold text-amber-400 uppercase tracking-wider">
+        ⚙️ Painel do Administrador
+      </div>
+      <div class="flex items-center gap-2 flex-1 max-w-md">
+        <input type="text" id="input-novo-capitulo" placeholder="Livro e Capítulo (Ex: Salmos 23, João 3, Romanos 8)" 
+          class="w-full text-xs text-stone-900 px-3 py-1.5 rounded bg-white border border-stone-300 focus:outline-none">
+        <button onclick="alterarCapituloManual()" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded shrink-0 transition">
+          Mudar Capítulo
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cabeçalho -->
+  <header class="bg-white border-b border-stone-200 sticky top-0 z-10 shadow-sm">
+    <div class="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
+      <div>
+        <h1 class="text-xl font-bold text-amber-800 flex items-center gap-2">
+          📖 Bíblia Diária
+        </h1>
+        <p id="data-hoje" class="text-xs text-stone-500"></p>
+      </div>
+
+      <!-- Área de Usuário -->
+      <div id="area-usuario" class="flex items-center gap-3">
+        <span id="status-usuario" class="text-sm text-stone-600 hidden sm:inline">Modo Leitura (Visitante)</span>
+        <button id="btn-abrir-login" onclick="abrirModalLogin()" class="bg-amber-700 hover:bg-amber-800 text-white text-sm px-4 py-2 rounded-lg transition">
+          Entrar / Criar Conta
+        </button>
+        <button id="btn-sair" onclick="fazerLogout()" class="hidden text-sm text-red-600 hover:underline">
+          Sair
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Banner da Missão Diária do Usuário Logado -->
+  <div id="banner-missao" class="hidden bg-amber-50 border-b border-amber-200 px-4 py-3">
+    <div class="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center gap-2 text-sm text-amber-900">
+        <span class="text-lg">🎯</span>
+        <span id="texto-banner-missao">Sorteando sua atividade de hoje...</span>
+      </div>
+      <span id="status-missao-badge" class="text-xs font-bold uppercase px-2.5 py-1 rounded-full"></span>
+    </div>
+  </div>
+
+  <!-- Conteúdo Principal -->
+  <main class="max-w-5xl mx-auto w-full px-4 py-8 flex-1 grid grid-cols-1 lg:grid-cols-3 gap-8">
+    
+    <!-- Coluna do Capítulo da Bíblia -->
+    <div class="lg:col-span-2 bg-white p-6 sm:p-8 rounded-xl shadow-sm border border-stone-200">
+      <div class="flex flex-wrap justify-between items-center border-b border-stone-100 pb-4 mb-6 gap-4">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-amber-700 font-semibold">Leitura do Dia</span>
+          <h2 id="titulo-capitulo" class="text-2xl sm:text-3xl font-serif font-bold text-stone-900 mt-1">Carregando capítulo...</h2>
+        </div>
+
+        <!-- Botão de Atualizar Amostra Dinâmica -->
+        <button onclick="embaralharAmostraComunidade()" class="flex items-center gap-1.5 text-xs bg-stone-100 hover:bg-amber-100 text-stone-700 hover:text-amber-900 font-medium px-3 py-2 rounded-lg border border-stone-200 transition shadow-sm" title="Ver outros destaques e comentários feitos pela comunidade">
+          🔄 Ver outros olhares da comunidade
+        </button>
+      </div>
+
+      <p class="text-xs text-stone-500 mb-6 bg-stone-50 border border-stone-200 p-3 rounded-lg">
+        💡 Exibindo uma seleção limpa de destaques e notas. Clique em qualquer versículo para ler ou cumprir sua atividade do dia.
+      </p>
+
+      <!-- Lista de Versículos -->
+      <div id="lista-versiculos" class="space-y-3 text-lg leading-relaxed font-serif">
+        <p class="text-stone-400 animate-pulse">Buscando o texto bíblico de hoje...</p>
+      </div>
+    </div>
+
+    <!-- Painel Lateral de Interações -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-stone-200 h-fit lg:sticky lg:top-24">
+      <div id="painel-vazio" class="text-center py-12 text-stone-400">
+        <p class="text-4xl mb-2">👆</p>
+        <p class="text-sm">Clique em um versículo ao lado para explorar as notas da comunidade ou realizar sua atividade diária.</p>
+      </div>
+
+      <div id="painel-versiculo" class="hidden">
+        <div class="border-b border-stone-200 pb-3 mb-4">
+          <div class="flex justify-between items-center">
+            <span id="badge-versiculo" class="text-xs font-bold uppercase bg-amber-100 text-amber-800 px-2 py-1 rounded">Versículo X</span>
+            <span id="contador-destaques" class="text-xs text-stone-500">0 destaque(s)</span>
+          </div>
+          <p id="texto-versiculo-selecionado" class="text-sm italic text-stone-600 mt-2 line-clamp-3"></p>
+        </div>
+
+        <!-- Lista de Comentários e Referências (Amostra de até 3 por vez) -->
+        <div class="space-y-3 mb-6">
+          <div class="flex justify-between items-center border-b pb-1">
+            <h3 class="text-xs font-bold uppercase text-stone-500">Notas da Comunidade</h3>
+            <button id="btn-girar-comentarios" onclick="atualizarPainelLateral(true)" class="hidden text-[11px] text-amber-700 hover:underline font-medium">
+              🔄 Sortear outras notas
+            </button>
+          </div>
+          
+          <div id="lista-interacoes-versiculo" class="space-y-3 max-h-64 overflow-y-auto pr-1"></div>
+        </div>
+
+        <!-- ÁREA DE MISSÃO DIÁRIA DO USUÁRIO -->
+        <div id="container-acao-usuario" class="pt-4 border-t border-stone-200">
+          
+          <!-- Caso 1: Visitante Deslogado -->
+          <div id="aviso-login-interacao" class="hidden text-center">
+            <p class="text-xs text-stone-500 mb-2">Crie uma conta gratuita para receber sua missão diária de estudo (Comentar, Destacar ou Referenciar).</p>
+            <button onclick="abrirModalLogin()" class="w-full bg-stone-800 hover:bg-stone-900 text-white text-xs py-2.5 rounded-lg font-medium">
+              Entrar para Receber Missão Diária
+            </button>
+          </div>
+
+          <!-- Caso 2: Usuário já cumpriu a missão hoje -->
+          <div id="box-missao-concluida" class="hidden bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+            <p class="text-xs font-bold text-green-800 mb-1">✅ Missão de Hoje Concluída!</p>
+            <p class="text-[11px] text-green-700 mb-2">Você já realizou sua contribuição diária. Volte amanhã para um novo sorteio!</p>
+            <button onclick="desfazerMissaoHoje()" class="text-[11px] text-red-600 hover:underline font-medium">
+              Apagar minha atividade de hoje e refazer
+            </button>
+          </div>
+
+          <!-- Caso 3: Ferramenta Sorteada -> DESTAQUE -->
+          <div id="ferramenta-destaque" class="hidden">
+            <p class="text-xs font-bold text-amber-900 mb-1">🎨 Sua missão hoje: Destacar um versículo</p>
+            <p class="text-[11px] text-stone-500 mb-3">Escolha uma cor abaixo para marcar este versículo como o seu destaque do dia:</p>
+            <div class="flex gap-3 justify-center py-1">
+              <button onclick="salvarInteracao('destaque', 'Destaque Amarelo', 'yellow')" class="px-3 py-1.5 rounded-lg bg-yellow-200 border border-yellow-400 text-xs font-medium hover:scale-105 transition">Amarelo</button>
+              <button onclick="salvarInteracao('destaque', 'Destaque Verde', 'green')" class="px-3 py-1.5 rounded-lg bg-green-200 border border-green-400 text-xs font-medium hover:scale-105 transition">Verde</button>
+              <button onclick="salvarInteracao('destaque', 'Destaque Azul', 'blue')" class="px-3 py-1.5 rounded-lg bg-blue-200 border border-blue-400 text-xs font-medium hover:scale-105 transition">Azul</button>
+            </div>
+          </div>
+
+          <!-- Caso 4: Ferramenta Sorteada -> COMENTÁRIO (Máximo 140 caracteres) -->
+          <div id="ferramenta-comentario" class="hidden">
+            <div class="flex justify-between items-center mb-1">
+              <p class="text-xs font-bold text-amber-900">💬 Sua missão: Comentário curto</p>
+              <span id="contador-caracteres" class="text-[11px] text-stone-400 font-mono">0/140</span>
+            </div>
+            <textarea 
+              id="texto-comentario" 
+              rows="2" 
+              maxlength="140"
+              oninput="document.getElementById('contador-caracteres').innerText = this.value.length + '/140'"
+              placeholder="Escreva uma síntese ou reflexão curta (máx. 140 caracteres)..." 
+              class="w-full text-sm border border-stone-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-amber-600 resize-none"
+            ></textarea>
+            <button onclick="enviarTextoMissao('comentario')" class="w-full mt-2 bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold py-2.5 rounded-lg transition">
+              Publicar Meu Comentário do Dia
+            </button>
+          </div>
+
+          <!-- Caso 5: Ferramenta Sorteada -> REFERÊNCIA (Máximo 80 caracteres) -->
+          <div id="ferramenta-referencia" class="hidden">
+            <div class="flex justify-between items-center mb-1">
+              <p class="text-xs font-bold text-amber-900">🔗 Sua missão: Referenciar outro texto</p>
+              <span id="contador-ref" class="text-[11px] text-stone-400 font-mono">0/80</span>
+            </div>
+            <input 
+              type="text" 
+              id="texto-referencia" 
+              maxlength="80"
+              oninput="document.getElementById('contador-ref').innerText = this.value.length + '/80'"
+              placeholder="Ex: João 3:16 (Conexão sobre o amor de Deus)" 
+              class="w-full text-sm border border-stone-300 rounded-lg p-2 mt-1 focus:outline-none focus:border-amber-600"
+            >
+            <button onclick="enviarTextoMissao('referencia')" class="w-full mt-2 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold py-2.5 rounded-lg transition">
+              Publicar Minha Referência do Dia
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal de Login / Cadastro -->
+  <div id="modal-login" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-xl">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-stone-800">Sua Conta</h3>
+        <button onclick="fecharModalLogin()" class="text-stone-400 hover:text-stone-600 text-xl">&times;</button>
+      </div>
+
+      <p class="text-xs text-stone-500 mb-4">
+        Confirme seu e-mail para receber diariamente uma missão de estudo bíblico na comunidade.
+      </p>
+
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-semibold text-stone-600">Seu Nome</label>
+          <input type="text" id="input-nome" placeholder="Ex: João Silva" class="w-full border border-stone-300 rounded-lg p-2 text-sm mt-1">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-stone-600">Seu E-mail</label>
+          <input type="email" id="input-email" placeholder="seu@email.com" class="w-full border border-stone-300 rounded-lg p-2 text-sm mt-1">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-stone-600">Senha (mínimo 6 caracteres)</label>
+          <input type="password" id="input-senha" placeholder="••••••" class="w-full border border-stone-300 rounded-lg p-2 text-sm mt-1">
+        </div>
+
+        <p id="msg-autenticacao" class="text-xs font-medium hidden p-2 rounded"></p>
+
+        <div class="flex gap-2 pt-2">
+          <button onclick="fazerLogin()" class="flex-1 bg-amber-700 hover:bg-amber-800 text-white text-sm font-medium py-2 rounded-lg">
+            Entrar
+          </button>
+          <button onclick="criarConta()" class="flex-1 bg-stone-200 hover:bg-stone-300 text-stone-800 text-sm font-medium py-2 rounded-lg">
+            Criar Conta
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // ETAPA 4: COLOQUE SUAS 3 INFORMAÇÕES NAS LINHAS ABAIXO
+    // =========================================================================
+    const SUPABASE_URL = 'https://tspytoknryzkcvttwptd.supabase.co/rest/v1/';
+    const SUPABASE_ANON_KEY = 'sb_publishable_U65ylJxrHzbmb-hBADRRyw_3L0zu4gk';
+    const EMAIL_ADMIN = 'projetodevocionalbiblia@gmail.com';
+
+    // Limites de exibição limpa por vez
+    const LIMITE_DESTAQUES_TELA = 5;
+    const LIMITE_NOTAS_VERSICULO = 3;
+
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let usuarioAtual = null;
+    let missaoSorteadaHoje = null;
+    let atividadeFeitaHoje = null;
+    let capituloIdAtual = '';
+    let versiculoSelecionado = null;
+    let versiculosTexto = [];
+    let todasInteracoesCapitulo = [];
+    let amostraDestaquesAtuais = [];
+
+    window.onload = async () => {
+      mostrarDataHoje();
+      await verificarSessaoUsuario();
+      await carregarCapituloDoDia();
+    };
+
+    function obterDataHojeISO() {
+      return new Date().toISOString().split('T')[0];
+    }
+
+    function mostrarDataHoje() {
+      const opcoes = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+      document.getElementById('data-hoje').innerText = new Date().toLocaleDateString('pt-BR', opcoes);
+    }
+
+    function embaralharArray(lista) {
+      const copia = [...lista];
+      for (let i = copia.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copia[i], copia[j]] = [copia[j], copia[i]];
+      }
+      return copia;
+    }
+
+    // =========================================================================
+    // SORTEIO DA MISSÃO DIÁRIA E AUTENTICAÇÃO
+    // =========================================================================
+    function sortearMissaoParaUsuario(userId) {
+      const semente = userId + '-' + obterDataHojeISO();
+      let hash = 0;
+      for (let i = 0; i < semente.length; i++) {
+        hash = ((hash << 5) - hash) + semente.charCodeAt(i);
+        hash |= 0;
+      }
+      const missoes = ['comentario', 'destaque', 'referencia'];
+      return missoes[Math.abs(hash) % 3];
+    }
+
+    async function verificarSessaoUsuario() {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      await atualizarInterfaceUsuario(session?.user || null);
+
+      supabaseClient.auth.onAuthStateChange(async (_event, session) => {
+        await atualizarInterfaceUsuario(session?.user || null);
+      });
+    }
+
+    async function atualizarInterfaceUsuario(user) {
+      usuarioAtual = user;
+      const statusEl = document.getElementById('status-usuario');
+      const btnLogin = document.getElementById('btn-abrir-login');
+      const btnSair = document.getElementById('btn-sair');
+      const painelAdmin = document.getElementById('painel-admin');
+      const bannerMissao = document.getElementById('banner-missao');
+
+      if (user) {
+        const nome = user.user_metadata?.nome || user.email.split('@')[0];
+        statusEl.innerText = `Olá, ${nome}`;
+        btnLogin.classList.add('hidden');
+        btnSair.classList.remove('hidden');
+        bannerMissao.classList.remove('hidden');
+
+        if (user.email.toLowerCase() === EMAIL_ADMIN.toLowerCase()) {
+          painelAdmin.classList.remove('hidden');
+        } else {
+          painelAdmin.classList.add('hidden');
+        }
+
+        missaoSorteadaHoje = sortearMissaoParaUsuario(user.id);
+        await checarSeJaCumpriuMissaoHoje();
+      } else {
+        statusEl.innerText = 'Modo Leitura (Visitante)';
+        btnLogin.classList.remove('hidden');
+        btnSair.classList.add('hidden');
+        painelAdmin.classList.add('hidden');
+        bannerMissao.classList.add('hidden');
+        missaoSorteadaHoje = null;
+        atividadeFeitaHoje = null;
+        atualizarCaixaDeFerramentas();
+      }
+    }
+
+    async function checarSeJaCumpriuMissaoHoje() {
+      if (!usuarioAtual) return;
+
+      const { data } = await supabaseClient
+        .from('interacoes')
+        .select('*')
+        .eq('user_id', usuarioAtual.id)
+        .eq('data_missao', obterDataHojeISO())
+        .maybeSingle();
+
+      atividadeFeitaHoje = data || null;
+      atualizarBannerMissao();
+      atualizarCaixaDeFerramentas();
+    }
+
+    function atualizarBannerMissao() {
+      const textoBanner = document.getElementById('texto-banner-missao');
+      const badge = document.getElementById('status-missao-badge');
+
+      const nomesMissao = {
+        'comentario': '💬 Escrever 1 Comentário curto (máx. 140 caracteres)',
+        'destaque': '🎨 Destacar 1 versículo que chamou sua atenção',
+        'referencia': '🔗 Conectar 1 versículo a outra referência da Bíblia'
+      };
+
+      textoBanner.innerHTML = `<strong>Sua Missão de Hoje:</strong> ${nomesMissao[missaoSorteadaHoje]}`;
+
+      if (atividadeFeitaHoje) {
+        badge.innerText = 'Concluída ✅';
+        badge.className = 'text-xs font-bold uppercase px-2.5 py-1 rounded-full bg-green-200 text-green-900';
+      } else {
+        badge.innerText = 'Pendente ⏳';
+        badge.className = 'text-xs font-bold uppercase px-2.5 py-1 rounded-full bg-amber-200 text-amber-900';
+      }
+    }
+
+    function atualizarCaixaDeFerramentas() {
+      const ids = ['aviso-login-interacao', 'box-missao-concluida', 'ferramenta-destaque', 'ferramenta-comentario', 'ferramenta-referencia'];
+      ids.forEach(id => document.getElementById(id).classList.add('hidden'));
+
+      if (!usuarioAtual) {
+        document.getElementById('aviso-login-interacao').classList.remove('hidden');
+        return;
+      }
+
+      if (atividadeFeitaHoje) {
+        document.getElementById('box-missao-concluida').classList.remove('hidden');
+        return;
+      }
+
+      if (missaoSorteadaHoje === 'destaque') document.getElementById('ferramenta-destaque').classList.remove('hidden');
+      if (missaoSorteadaHoje === 'comentario') document.getElementById('ferramenta-comentario').classList.remove('hidden');
+      if (missaoSorteadaHoje === 'referencia') document.getElementById('ferramenta-referencia').classList.remove('hidden');
+    }
+
+    // =========================================================================
+    // CAPÍTULO DO DIA E AMOSTRAGEM DINÂMICA
+    // =========================================================================
+    async function carregarCapituloDoDia() {
+      const { data: config } = await supabaseClient
+        .from('config_leitura')
+        .select('*')
+        .eq('id', 1)
+        .single();
+
+      const refEscolhida = config ? config.referencia : 'João 1';
+      capituloIdAtual = config ? config.capitulo_id : 'JOA-1';
+
+      document.getElementById('titulo-capitulo').innerText = refEscolhida;
+
+      try {
+        const resp = await fetch(`https://bible-api.com/${ encodeURIComponent(refEscolhida) }?translation=almeida`);
+        const dados = await resp.json();
+
+        if (!dados.verses) {
+          document.getElementById('lista-versiculos').innerHTML = `<p class="text-red-600">Capítulo "${refEscolhida}" não encontrado.</p>`;
+          return;
+        }
+
+        versiculosTexto = dados.verses;
+        await buscarInteracoesDoBanco();
+        embaralharAmostraComunidade();
+      } catch (err) {
+        document.getElementById('lista-versiculos').innerHTML = `<p class="text-red-600">Erro ao carregar o texto bíblico.</p>`;
+      }
+    }
+
+    async function buscarInteracoesDoBanco() {
+      const { data, error } = await supabaseClient
+        .from('interacoes')
+        .select('*')
+        .eq('capitulo_id', capituloIdAtual);
+
+      if (!error && data) {
+        todasInteracoesCapitulo = data;
+      }
+    }
+
+    function embaralharAmostraComunidade() {
+      const todosDestaques = todasInteracoesCapitulo.filter(i => i.tipo === 'destaque');
+      amostraDestaquesAtuais = embaralharArray(todosDestaques).slice(0, LIMITE_DESTAQUES_TELA);
+      renderizarVersiculos();
+
+      if (versiculoSelecionado) {
+        atualizarPainelLateral(true);
+      }
+    }
+
+    function renderizarVersiculos() {
+      const container = document.getElementById('lista-versiculos');
+      container.innerHTML = '';
+
+      versiculosTexto.forEach(v => {
+        const num = v.verse;
+        const interacoesDesseVersiculo = todasInteracoesCapitulo.filter(i => i.versiculo_num === num);
+        const comentariosERefs = interacoesDesseVersiculo.filter(i => i.tipo !== 'destaque');
+        const destaqueNaAmostra = amostraDestaquesAtuais.find(d => d.versiculo_num === num);
+
+        let classeDestaque = 'hover:bg-stone-100';
+        if (destaqueNaAmostra) {
+          if (destaqueNaAmostra.cor_destaque === 'yellow') classeDestaque = 'bg-yellow-100/80 hover:bg-yellow-200/80';
+          if (destaqueNaAmostra.cor_destaque === 'green') classeDestaque = 'bg-green-100/80 hover:bg-green-200/80';
+          if (destaqueNaAmostra.cor_destaque === 'blue') classeDestaque = 'bg-blue-100/80 hover:bg-blue-200/80';
+        }
+
+        const div = document.createElement('div');
+        div.className = `p-2 rounded-lg cursor-pointer transition flex items-start justify-between gap-2 ${classeDestaque}`;
+        div.onclick = () => selecionarVersiculo(num, v.text);
+
+        div.innerHTML = `
+          <div>
+            <sup class="text-xs font-bold text-amber-800 mr-1 select-none">${num}</sup>
+            <span>${v.text}</span>
+          </div>
+          ${comentariosERefs.length > 0 ? `
+            <span class="shrink-0 text-xs bg-stone-200 text-stone-700 px-2 py-0.5 rounded-full font-sans">
+              💬 ${comentariosERefs.length}
+            </span>
+          ` : ''}
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function selecionarVersiculo(numero, texto) {
+      versiculoSelecionado = numero;
+      document.getElementById('painel-vazio').classList.add('hidden');
+      document.getElementById('painel-versiculo').classList.remove('hidden');
+
+      document.getElementById('badge-versiculo').innerText = `Versículo ${numero}`;
+      document.getElementById('texto-versiculo-selecionado').innerText = `"${texto.trim()}"`;
+
+      atualizarPainelLateral(false);
+    }
+
+    function atualizarPainelLateral(embaralharNotas = false) {
+      const interacoes = todasInteracoesCapitulo.filter(i => i.versiculo_num === versiculoSelecionado);
+      const destaques = interacoes.filter(i => i.tipo === 'destaque');
+      let comentariosERefs = interacoes.filter(i => i.tipo !== 'destaque');
+
+      document.getElementById('contador-destaques').innerText = `${destaques.length} destaque(s) no total`;
+
+      const btnGirar = document.getElementById('btn-girar-comentarios');
+      if (comentariosERefs.length > LIMITE_NOTAS_VERSICULO) {
+        btnGirar.classList.remove('hidden');
+      } else {
+        btnGirar.classList.add('hidden');
+      }
+
+      const amostraNotas = embaralharArray(comentariosERefs).slice(0, LIMITE_NOTAS_VERSICULO);
+
+      const listaEl = document.getElementById('lista-interacoes-versiculo');
+      listaEl.innerHTML = '';
+
+      if (amostraNotas.length === 0) {
+        listaEl.innerHTML = `<p class="text-xs text-stone-400 italic">Nenhum comentário ou referência neste versículo ainda.</p>`;
+        return;
+      }
+
+      amostraNotas.forEach(item => {
+        const badgeTipo = item.tipo === 'referencia' 
+          ? `<span class="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold">🔗 Referência</span>`
+          : `<span class="text-[10px] bg-stone-200 text-stone-700 px-1.5 py-0.5 rounded">💬 Comentário</span>`;
+
+        const card = document.createElement('div');
+        card.className = 'bg-stone-50 p-3 rounded-lg border border-stone-200 text-sm';
+        card.innerHTML = `
+          <div class="flex justify-between items-center mb-1">
+            <span class="font-bold text-xs text-stone-700">${item.user_name}</span>
+            ${badgeTipo}
+          </div>
+          <p class="text-stone-600 text-xs break-words">${item.conteudo}</p>
+        `;
+        listaEl.appendChild(card);
+      });
+    }
+
+    // =========================================================================
+    // SALVAR E DESFAZER A MISSÃO DIÁRIA
+    // =========================================================================
+    async function enviarTextoMissao(tipo) {
+      const idCampo = tipo === 'comentario' ? 'texto-comentario' : 'texto-referencia';
+      const conteudo = document.getElementById(idCampo).value.trim();
+
+      if (!conteudo) return alert('Preencha o campo antes de publicar sua missão!');
+      if (conteudo.length > 140) return alert('O texto deve ter no máximo 140 caracteres.');
+
+      await salvarInteracao(tipo, conteudo, null);
+      document.getElementById(idCampo).value = '';
+      if (tipo === 'comentario') document.getElementById('contador-caracteres').innerText = '0/140';
+      if (tipo === 'referencia') document.getElementById('contador-ref').innerText = '0/80';
+    }
+
+    async function salvarInteracao(tipo, conteudo, cor) {
+      if (!usuarioAtual) return abrirModalLogin();
+      if (atividadeFeitaHoje) return alert('Você já concluiu sua atividade de hoje!');
+
+      const nomeUsuario = usuarioAtual.user_metadata?.nome || usuarioAtual.email.split('@')[0];
+
+      const { error } = await supabaseClient.from('interacoes').insert([{
+        user_id: usuarioAtual.id,
+        user_name: nomeUsuario,
+        capitulo_id: capituloIdAtual,
+        versiculo_num: versiculoSelecionado,
+        tipo: tipo,
+        conteudo: conteudo,
+        cor_destaque: cor,
+        data_missao: obterDataHojeISO()
+      }]);
+
+      if (error) {
+        alert('Não foi possível salvar: ' + error.message);
+      } else {
+        await checarSeJaCumpriuMissaoHoje();
+        await buscarInteracoesDoBanco();
+        embaralharAmostraComunidade();
+      }
+    }
+
+    async function desfazerMissaoHoje() {
+      if (!atividadeFeitaHoje) return;
+      const { error } = await supabaseClient.from('interacoes').delete().eq('id', atividadeFeitaHoje.id);
+      if (!error) {
+        await checarSeJaCumpriuMissaoHoje();
+        await buscarInteracoesDoBanco();
+        embaralharAmostraComunidade();
+      }
+    }
+
+    // =========================================================================
+    // FUNÇÕES DE LOGIN E PAINEL ADMIN
+    // =========================================================================
+    async function alterarCapituloManual() {
+      const novaRef = document.getElementById('input-novo-capitulo').value.trim();
+      if (!novaRef) return alert('Digite o livro e capítulo (ex: Salmos 23).');
+
+      const testeResp = await fetch(`https://bible-api.com/${ encodeURIComponent(novaRef) }?translation=almeida`);
+      const testeDados = await testeResp.json();
+
+      if (!testeDados.verses) {
+        return alert('Não encontramos "' + novaRef + '". Tente escrever o nome completo em português.');
+      }
+
+      const novoId = novaRef.toUpperCase().replace(/\s+/g, '-');
+      const { error } = await supabaseClient
+        .from('config_leitura')
+        .update({ referencia: testeDados.reference, capitulo_id: novoId })
+        .eq('id', 1);
+
+      if (!error) {
+        document.getElementById('input-novo-capitulo').value = '';
+        document.getElementById('painel-versiculo').classList.add('hidden');
+        document.getElementById('painel-vazio').classList.remove('hidden');
+        await carregarCapituloDoDia();
+        alert('✅ Capítulo alterado para ' + testeDados.reference);
+      }
+    }
+
+    async function criarConta() {
+      const nome = document.getElementById('input-nome').value.trim();
+      const email = document.getElementById('input-email').value.trim();
+      const password = document.getElementById('input-senha').value;
+      if (!nome || !email || !password) return mostrarMensagemAuth('Preencha todos os campos.', 'erro');
+
+      const { error } = await supabaseClient.auth.signUp({ email, password, options: { data: { nome } } });
+      if (error) mostrarMensagemAuth('Erro: ' + error.message, 'erro');
+      else mostrarMensagemAuth('✅ Conta criada! Confirme no seu e-mail antes de entrar.', 'sucesso');
+    }
+
+    async function fazerLogin() {
+      const email = document.getElementById('input-email').value.trim();
+      const password = document.getElementById('input-senha').value;
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) mostrarMensagemAuth('Erro ao entrar: Verifique e-mail e senha.', 'erro');
+      else fecharModalLogin();
+    }
+
+    async function fazerLogout() { await supabaseClient.auth.signOut(); }
+
+    function mostrarMensagemAuth(texto, tipo) {
+      const el = document.getElementById('msg-autenticacao');
+      el.innerText = texto;
+      el.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700');
+      el.classList.add(tipo === 'erro' ? 'bg-red-100' : 'bg-green-100', tipo === 'erro' ? 'text-red-700' : 'text-green-700');
+    }
+
+    function abrirModalLogin() { document.getElementById('modal-login').classList.replace('hidden', 'flex'); }
+    function fecharModalLogin() { document.getElementById('modal-login').classList.replace('flex', 'hidden'); }
+  </script>
+</body>
+</html>
